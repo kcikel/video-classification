@@ -86,7 +86,7 @@ class Dataset_CRNN(data.Dataset):
             #image = Image.open(os.path.join(path, selected_folder, i))
         for i in self.frames:
             #image = Image.open(os.path.join(path, selected_folder, 'frame{:06d}.jpg'.format(i)))
-            image = Image.open(os.path.join(path, selected_folder, '{:06d}.jpg'.format(i)))
+            image = Image.open(os.path.join(path, selected_folder, '{:01d}.jpg'.format(i)))
 
             if use_transform is not None:
                 image = use_transform(image)
@@ -108,6 +108,111 @@ class Dataset_CRNN(data.Dataset):
         # print(X.shape)
         return X, y
 
+
+class Dataset_CRNN_flow(data.Dataset):
+    "Characterizes a dataset for PyTorch"
+    def __init__(self, data_path, folders, labels, frames, transform=None):
+        "Initialization"
+        self.data_path = data_path
+        self.labels = labels
+        self.folders = folders
+        self.transform = transform
+        self.frames = frames
+
+    def __len__(self):
+        "Denotes the total number of samples"
+        return len(self.folders)
+
+    def read_images(self, path, selected_folder, use_transform):
+        X = []
+        #for i in os.listdir(path+'/'+selected_folder):
+            #image = Image.open(os.path.join(path, selected_folder, i))
+        for i in self.frames:
+            #image = Image.open(os.path.join(path, selected_folder, 'frame{:06d}.jpg'.format(i)))
+            image = Image.open(os.path.join(path, selected_folder, '{:06d}.jpg'.format(i)))
+
+            if use_transform is not None:
+                image = use_transform(image)
+
+            X.append(image)
+        X = torch.stack(X, dim=0)
+
+        return X
+
+    def __getitem__(self, index):
+        "Generates one sample of data"
+        # Select sample
+        folder = self.folders[index]
+
+        # Load data
+        X = self.read_images(self.data_path, folder, self.transform)     # (input) spatial images
+        y = torch.LongTensor([self.labels[index]])                  # (labels) LongTensor are for int64 instead of FloatTensor
+
+        # print(X.shape)
+        return X, y
+    
+class Dataset_CRNN2(data.Dataset):
+    "Characterizes a dataset for PyTorch"
+    def __init__(self, data_path, data_path2, folders, labels, frames, transform=None):
+        "Initialization"
+        self.data_path = data_path
+        self.data_path2 = data_path2
+        self.labels = labels
+        self.folders = folders
+        self.transform = transform
+        self.frames = frames
+
+    def __len__(self):
+        "Denotes the total number of samples"
+        return len(self.folders)
+
+    def read_images(self, path, selected_folder, use_transform):
+        X = []
+        #for i in os.listdir(path+'/'+selected_folder):
+            #image = Image.open(os.path.join(path, selected_folder, i))
+        for i in self.frames:
+            #image = Image.open(os.path.join(path, selected_folder, 'frame{:06d}.jpg'.format(i)))
+            image = Image.open(os.path.join(path, selected_folder, '{:1d}.jpg'.format(i)))
+
+            if use_transform is not None:
+                image = use_transform(image)
+
+            X.append(image)
+        X = torch.stack(X, dim=0)
+
+        return X
+        
+    def read_images2(self, path, selected_folder, use_transform):
+        X = []
+        #for i in os.listdir(path+'/'+selected_folder):
+            #image = Image.open(os.path.join(path, selected_folder, i))
+        for i in self.frames:
+            #image = Image.open(os.path.join(path, selected_folder, 'frame{:06d}.jpg'.format(i)))
+            image = Image.open(os.path.join(path, selected_folder, '{:06d}.jpg'.format(i)))
+
+            if use_transform is not None:
+                image = use_transform(image)
+
+            X.append(image)
+        X = torch.stack(X, dim=0)
+
+        return X
+
+    def __getitem__(self, index):
+        "Generates one sample of data"
+        # Select sample
+        folder = self.folders[index]
+
+        # Load data
+        X1 = self.read_images(self.data_path, folder, self.transform)     # (input) spatial images
+        X2 = self.read_images2(self.data_path2, folder, self.transform)     # (input) spatial images
+        y = torch.LongTensor([self.labels[index]])                  # (labels) LongTensor are for int64 instead of FloatTensor
+        #X = [X1,X2]
+
+        # print(X.shape)
+        X = torch.stack([X1,X2], dim=2)
+        
+        return X, y
 ## ---------------------- end of Dataloaders ---------------------- ##
 
 

@@ -9,7 +9,7 @@ import torch.utils.data as data
 import torchvision
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
-from functions import *
+from functions2 import *
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.metrics import accuracy_score
@@ -19,39 +19,44 @@ import time
 
 
 # set path
-data_path = "/media/lsd/Disco 3/ufc/jpegs_256/"    # define UCF-101 RGB data path
-action_name_path = './UCF101actions.pkl'
-save_model_path = "./ResNetCRNN_ckpt/"
+data_path = "/home/lsd/USTC/I3D_Finetune/data/handwash/"  
+data_path2 = "/home/lsd/USTC/I3D_Finetune/data/handwash_flow_xy/"   # define UCF-101 RGB data path
+save_model_path = "/media/lsd/Disco 3/concat_ckpt2/"
+
+last_epoch = 0
 
 # EncoderCNN architecture
-CNN_fc_hidden1, CNN_fc_hidden2 = 1024, 768
-CNN_embed_dim = 512   # latent dim extracted by 2D CNN
+CNN_fc_hidden1, CNN_fc_hidden2 = 2048, 1536
+CNN_embed_dim = 1024   # latent dim extracted by 2D CNN
 res_size = 224        # ResNet image size
-dropout_p = 0.0       # dropout probability
+dropout_p = 0.4       # dropout probability
 
 # DecoderRNN architecture
+#RNN_hidden_layers = 2
+#RNN_hidden_nodes = 1024
+#RNN_FC_dim = 512
+
 RNN_hidden_layers = 3
 RNN_hidden_nodes = 512
 RNN_FC_dim = 256
 # training parameters
-k = 101             # number of target category
-epochs = 120        # training epochs
-batch_size = 250  
+k = 12             # number of target category
+epochs = 300        # training epochs
+batch_size = 15  
 learning_rate = 1e-3
-log_interval = 10   # interval for displaying training info
+log_interval = 1   # interval for displaying training info
 
 # Select which frame to begin & end in videos
-begin_frame, end_frame, skip_frame = 1, 29, 1
+begin_frame, end_frame, skip_frame = 1, 128, 1
 
 
 def train(log_interval, model, device, train_loader, optimizer, epoch):
     # set model as training mode
     cnn_encoder, rnn_decoder = model
-#    cnn_encoder.load_state_dict(torch.load(save_model_path + "cnn_encoder_epoch12.pth"))
-#    rnn_decoder.load_state_dict(torch.load(save_model_path + "rnn_decoder_epoch12.pth"))
-#    optimizer.load_state_dict(torch.load(save_model_path + "optimizer_epoch12.pth"))
-
-    
+    if last_epoch > 0:
+        cnn_encoder.load_state_dict(torch.load(save_model_path + "cnn_encoder_epoch" + str(last_epoch) + ".pth"))
+        rnn_decoder.load_state_dict(torch.load(save_model_path + "rnn_decoder_epoch" + str(last_epoch) + ".pth"))
+        optimizer.load_state_dict(torch.load(save_model_path + "optimizer_epoch" + str(last_epoch) + ".pth"))
     cnn_encoder.train()
     rnn_decoder.train()
 
@@ -61,6 +66,7 @@ def train(log_interval, model, device, train_loader, optimizer, epoch):
     for batch_idx, (X, y) in enumerate(train_loader):
         # distribute data to device
         X, y = X.to(device), y.to(device).view(-1, )
+        #X = [X1, X2]
 
         N_count += X.size(0)
 
@@ -121,9 +127,9 @@ def validation(model, device, optimizer, test_loader):
     print('\nTest set ({:d} samples): Average loss: {:.4f}, Accuracy: {:.2f}%\n'.format(len(all_y), test_loss, 100* test_score))
 
     # save Pytorch models of best record
-    torch.save(cnn_encoder.state_dict(), os.path.join(save_model_path, 'cnn_encoder_epoch{}.pth'.format(epoch + 1)))  # save spatial_encoder
-    torch.save(rnn_decoder.state_dict(), os.path.join(save_model_path, 'rnn_decoder_epoch{}.pth'.format(epoch + 1)))  # save motion_encoder
-    torch.save(optimizer.state_dict(), os.path.join(save_model_path, 'optimizer_epoch{}.pth'.format(epoch + 1)))      # save optimizer
+    torch.save(cnn_encoder.state_dict(), os.path.join(save_model_path, '2cnn_encoder_epoch{}.pth'.format(epoch + 1)))  # save spatial_encoder
+    torch.save(rnn_decoder.state_dict(), os.path.join(save_model_path, '2rnn_decoder_epoch{}.pth'.format(epoch + 1)))  # save motion_encoder
+    torch.save(optimizer.state_dict(), os.path.join(save_model_path, '2optimizer_epoch{}.pth'.format(epoch + 1)))      # save optimizer
     print("Epoch {} model saved!".format(epoch + 1))
 
     return test_loss, test_score
@@ -137,10 +143,10 @@ device = torch.device("cuda" if use_cuda else "cpu")   # use CPU or GPU
 params = {'batch_size': batch_size, 'shuffle': True, 'num_workers': 4, 'pin_memory': True} if use_cuda else {}
 
 
-# load UCF101 actions names
-with open(action_name_path, 'rb') as f:
-    action_names = pickle.load(f)
+    
+#action_names = ['1','2L','2R','3','4L','4R','5L','5R','6L','6R','7L','7R']
 
+action_names = ['01','02','03','04','05','06','07','08','09','10','11','12']
 # convert labels -> category
 le = LabelEncoder()
 le.fit(action_names)
@@ -163,15 +169,26 @@ fnames = os.listdir(data_path)
 
 all_names = []
 for f in fnames:
-    loc1 = f.find('v_')
-    loc2 = f.find('_g')
-    actions.append(f[(loc1 + 2): loc2])
+    loc1 = f.find('_A_')
+    loc2 = f.rfind('_G')
+    actions.append(f[(loc1 + 3): loc2])
 
     all_names.append(f)
+    
+fnames2 = os.listdir(data_path2)
+actions2 = []
+all_names2 = []
+for f in fnames2:
+    loc1 = f.find('_A_')
+    loc2 = f.rfind('_G')
+    actions2.append(f[(loc1 + 3): loc2])
 
+    all_names2.append(f)
 
+#%%
 # list all data files
 all_X_list = all_names                  # all video file names
+all_X_list2 = all_names2                 # all video file names
 all_y_list = labels2cat(le, actions)    # all video labels
 
 # train, test split
@@ -183,8 +200,18 @@ transform = transforms.Compose([transforms.Resize([res_size, res_size]),
 
 selected_frames = np.arange(begin_frame, end_frame, skip_frame).tolist()
 
-train_set, valid_set = Dataset_CRNN(data_path, train_list, train_label, selected_frames, transform=transform), \
-                       Dataset_CRNN(data_path, test_list, test_label, selected_frames, transform=transform)
+train_set, valid_set = Dataset_CRNN2(data_path, data_path2, train_list, train_label, selected_frames, transform=transform), \
+                       Dataset_CRNN2(data_path, data_path2, test_list, test_label, selected_frames, transform=transform)
+
+
+#train_set1 = [train_set[0], train_set[2]]
+#train_set2 = [train_set[1], train_set[2]]
+
+#valid_set1 = [valid_set[0], valid_set[2]]
+#valid_set2 = [valid_set[1], valid_set[2]]  
+
+#train_set = [[train_set[0],train_set[1]], train_set[2]]
+#valid_set = [[valid_set[0],valid_set[1]], valid_set[2]] 
 
 train_loader = data.DataLoader(train_set, **params)
 valid_loader = data.DataLoader(valid_set, **params)
@@ -194,6 +221,7 @@ valid_loader = data.DataLoader(valid_set, **params)
 cnn_encoder = ResCNNEncoder(fc_hidden1=CNN_fc_hidden1, fc_hidden2=CNN_fc_hidden2, drop_p=dropout_p, CNN_embed_dim=CNN_embed_dim).to(device)
 rnn_decoder = DecoderRNN(CNN_embed_dim=CNN_embed_dim, h_RNN_layers=RNN_hidden_layers, h_RNN=RNN_hidden_nodes, 
                          h_FC_dim=RNN_FC_dim, drop_p=dropout_p, num_classes=k).to(device)
+
 
 # Parallelize model to multiple GPUs
 if torch.cuda.device_count() > 1:
@@ -215,17 +243,25 @@ elif torch.cuda.device_count() == 1:
 
 optimizer = torch.optim.Adam(crnn_params, lr=learning_rate)
 
-
 # record training process
+
+
 epoch_train_losses = []
 epoch_train_scores = []
 epoch_test_losses = []
 epoch_test_scores = []
 
+if last_epoch > 0:
+    epoch_train_losses = np.load('concat_training_losses.npy').tolist()
+    epoch_train_scores = np.load('concat_training_scores.npy').tolist()
+    epoch_test_losses = np.load('concat_test_loss.npy').tolist()
+    epoch_test_scores = np.load('concat_test_score.npy').tolist()
+
 start = time.time()
+epochs = last_epoch + epochs
 
 # start training
-for epoch in range(epochs):
+for epoch in range(last_epoch, epochs):
     epoch_start = time.time()
     # train, test model
     train_losses, train_scores = train(log_interval, [cnn_encoder, rnn_decoder], device, train_loader, optimizer, epoch)
@@ -242,10 +278,10 @@ for epoch in range(epochs):
     B = np.array(epoch_train_scores)
     C = np.array(epoch_test_losses)
     D = np.array(epoch_test_scores)
-    np.save('./CRNN_epoch_training_losses.npy', A)
-    np.save('./CRNN_epoch_training_scores.npy', B)
-    np.save('./CRNN_epoch_test_loss.npy', C)
-    np.save('./CRNN_epoch_test_score.npy', D)
+    np.save('./concat_training_losses.npy', A)
+    np.save('./concat_training_scores.npy', B)
+    np.save('./concat_test_loss.npy', C)
+    np.save('./concat_test_score.npy', D)
     
     
     epoch_end = time.time()
@@ -278,7 +314,7 @@ plt.title("training scores")
 plt.xlabel('epochs')
 plt.ylabel('accuracy')
 plt.legend(['train', 'test'], loc="upper left")
-title = "./fig_UCF101_ResNetCRNN.png"
+title = "./fig_flow_ResNetCRNN2.png"
 plt.savefig(title, dpi=600)
 # plt.close(fig)
 plt.show()

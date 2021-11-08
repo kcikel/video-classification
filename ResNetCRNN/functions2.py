@@ -1,3 +1,4 @@
+#concat
 import os
 import numpy as np
 from PIL import Image
@@ -106,6 +107,69 @@ class Dataset_CRNN(data.Dataset):
         y = torch.LongTensor([self.labels[index]])                  # (labels) LongTensor are for int64 instead of FloatTensor
 
         # print(X.shape)
+        return X, y
+    
+class Dataset_CRNN2(data.Dataset):
+    "Characterizes a dataset for PyTorch"
+    def __init__(self, data_path, data_path2, folders, labels, frames, transform=None):
+        "Initialization"
+        self.data_path = data_path
+        self.data_path2 = data_path2
+        self.labels = labels
+        self.folders = folders
+        self.transform = transform
+        self.frames = frames
+
+    def __len__(self):
+        "Denotes the total number of samples"
+        return len(self.folders)
+
+    def read_images(self, path, selected_folder, use_transform):
+        X = []
+        #for i in os.listdir(path+'/'+selected_folder):
+            #image = Image.open(os.path.join(path, selected_folder, i))
+        for i in self.frames:
+            #image = Image.open(os.path.join(path, selected_folder, 'frame{:06d}.jpg'.format(i)))
+            image = Image.open(os.path.join(path, selected_folder, '{:1d}.jpg'.format(i)))
+
+            if use_transform is not None:
+                image = use_transform(image)
+
+            X.append(image)
+        X = torch.stack(X, dim=0)
+
+        return X
+        
+    def read_images2(self, path, selected_folder, use_transform):
+        X = []
+        #for i in os.listdir(path+'/'+selected_folder):
+            #image = Image.open(os.path.join(path, selected_folder, i))
+        for i in self.frames:
+            #image = Image.open(os.path.join(path, selected_folder, 'frame{:06d}.jpg'.format(i)))
+            image = Image.open(os.path.join(path, selected_folder, '{:06d}.jpg'.format(i)))
+
+            if use_transform is not None:
+                image = use_transform(image)
+
+            X.append(image)
+        X = torch.stack(X, dim=0)
+
+        return X
+
+    def __getitem__(self, index):
+        "Generates one sample of data"
+        # Select sample
+        folder = self.folders[index]
+
+        # Load data
+        X1 = self.read_images(self.data_path, folder, self.transform)     # (input) spatial images
+        X2 = self.read_images2(self.data_path2, folder, self.transform)     # (input) spatial images
+        y = torch.LongTensor([self.labels[index]])                  # (labels) LongTensor are for int64 instead of FloatTensor
+        #X = [X1,X2]
+
+        # print(X.shape)
+        X = torch.stack([X1,X2], dim=2)
+        
         return X, y
 
 ## ---------------------- end of Dataloaders ---------------------- ##
@@ -318,6 +382,8 @@ class ResCNNEncoder(nn.Module):
 
         resnet = models.resnet152(pretrained=True)
         modules = list(resnet.children())[:-1]      # delete the last fc layer.
+        resnet2 = models.resnet152(pretrained=True)
+        modules2 = list(resnet2.children())[:-1]      # delete the last fc layer.
         self.resnet = nn.Sequential(*modules)
         self.fc1 = nn.Linear(resnet.fc.in_features, fc_hidden1)
         self.bn1 = nn.BatchNorm1d(fc_hidden1, momentum=0.01)
@@ -325,13 +391,27 @@ class ResCNNEncoder(nn.Module):
         self.bn2 = nn.BatchNorm1d(fc_hidden2, momentum=0.01)
         self.fc3 = nn.Linear(fc_hidden2, CNN_embed_dim)
         
-    def forward(self, x_3d):
+        self.resnet2 = nn.Sequential(*modules2)
+        self.fc12 = nn.Linear(resnet2.fc.in_features, fc_hidden1)
+        self.bn12 = nn.BatchNorm1d(fc_hidden1, momentum=0.01)
+        self.fc22 = nn.Linear(fc_hidden1, fc_hidden2)
+        self.bn22 = nn.BatchNorm1d(fc_hidden2, momentum=0.01)
+        self.fc32 = nn.Linear(fc_hidden2, CNN_embed_dim)
+        
+        
+        
+    def forward(self, x_3d0):
+        #x_3d = x_3d0[0]
+        #x2_3d = x_3d0[1]
+        #print(x_3d0.shape)
+        #print((x_3d0.size(1)))
         cnn_embed_seq = []
-        for t in range(x_3d.size(1)):
+        for t in range(x_3d0.size(1)):
             # ResNet CNN
             with torch.no_grad():
-                x = self.resnet(x_3d[:, t, :, :, :])  # ResNet
+                x = self.resnet(x_3d0[:, t, :, 0, :, :])  # ResNet
                 x = x.view(x.size(0), -1)             # flatten output of conv
+            
 
             # FC layers
             x = self.bn1(self.fc1(x))
@@ -340,8 +420,37 @@ class ResCNNEncoder(nn.Module):
             x = F.relu(x)
             x = F.dropout(x, p=self.drop_p, training=self.training)
             x = self.fc3(x)
-
             cnn_embed_seq.append(x)
+            
+
+
+                
+            with torch.no_grad():
+                x2 = self.resnet2(x_3d0[:, t, :, 1, :, :])  # ResNet
+                x2 = x2.view(x2.size(0), -1)             # flatten output of con
+
+
+            x2 = self.bn12(self.fc12(x2))
+            x2 = F.relu(x2)
+            x2 = self.bn22(self.fc22(x2))
+            x2 = F.relu(x2)
+            x2 = F.dropout(x2, p=self.drop_p, training=self.training)
+            x2 = self.fc32(x2)           
+            cnn_embed_seq.append(x2)
+            
+            
+        # for t in range(x2_3d.size(1)):
+        #     x2 = self.bn12(self.fc12(x2))
+        #     x2 = F.relu(x2)
+        #     x2 = self.bn22(self.fc22(x2))
+        #     x2 = F.relu(x2)
+        #     x2 = F.dropout(x2, p=self.drop_p, training=self.training)
+        #     x2 = self.fc32(x2)
+                
+        #     with torch.no_grad():
+        #         x2 = self.resnet2(x2_3d[:, t, :, :, :])  # ResNet
+        #         x2 = x2.view(x2.size(0), -1)             # flatten output of con
+        #     cnn_embed_seq.append(x2)
 
         # swap time and sample dim such that (sample dim, time dim, CNN latent dim)
         cnn_embed_seq = torch.stack(cnn_embed_seq, dim=0).transpose_(0, 1)

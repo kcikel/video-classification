@@ -19,29 +19,29 @@ import time
 
 
 # set path
-data_path = "/media/lsd/Disco 3/ufc/jpegs_256/"    # define UCF-101 RGB data path
-action_name_path = './UCF101actions.pkl'
+data_path = "./jpegs_256/"    # define UCF-101 RGB data path
+action_name_path = './hmdb51actions.pkl'
 save_model_path = "./ResNetCRNN_ckpt/"
 
 # EncoderCNN architecture
 CNN_fc_hidden1, CNN_fc_hidden2 = 1024, 768
 CNN_embed_dim = 512   # latent dim extracted by 2D CNN
 res_size = 224        # ResNet image size
-dropout_p = 0.0       # dropout probability
+dropout_p = 0.5       # dropout probability
 
 # DecoderRNN architecture
 RNN_hidden_layers = 3
 RNN_hidden_nodes = 512
 RNN_FC_dim = 256
 # training parameters
-k = 101             # number of target category
+k = 51             # number of target category
 epochs = 120        # training epochs
-batch_size = 250  
+batch_size = 80  
 learning_rate = 1e-3
 log_interval = 10   # interval for displaying training info
 
 # Select which frame to begin & end in videos
-begin_frame, end_frame, skip_frame = 1, 29, 1
+begin_frame, end_frame, skip_frame = 1, 20, 1
 
 
 def train(log_interval, model, device, train_loader, optimizer, epoch):
@@ -164,7 +164,7 @@ fnames = os.listdir(data_path)
 all_names = []
 for f in fnames:
     loc1 = f.find('v_')
-    loc2 = f.find('_g')
+    loc2 = f.rfind('_g')
     actions.append(f[(loc1 + 2): loc2])
 
     all_names.append(f)
